@@ -12,10 +12,10 @@ var articleSchema = new Schema({
     required: true
   },
 
- // note: {
-   // type: Schema.Types.ObjectId,
-    //ref: "Note"
-  //}
+  note: {
+   type: Schema.Types.ObjectId,
+    ref: "Note"
+  }
 });
 
 var article = mongoose.model("article", articleSchema);

@@ -2,61 +2,70 @@ var express = require("express");
 var mongojs = require("mongojs");
 var cheerio = require("cheerio");
 var request = require("request");
+var bodyParser = require("body-parser");
+var mongoose = require("mongoose");
+
+var db = require("./models/article");
+var PORT = 3000;
 
 var app = express();
 var databaseURL = "funhausdb";
 var collections = ["scrapedData"];
 
-var db = mongojs(databaseURL, collections);
-db.on("error", function(error){
-    console.log("DB Error Occurred: ", error);
-});
+app.use(bodyParser.urlencoded({extended: true }));
+app.use(express.static("public"));
 
-app.get("/", function(req, res){
-    console.log("Hello World!");
-});
+var MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost/funhausdb";
+mongoose.Promise = Promise;
+mongoose.connect(MONGODB_URI);
 
-app.get("all", function(req, res){
-    db.scrapedData.find({}, function(error, found){
-        if (error){
-            console.log(error);
-        } else {
-            res.json(found);
-        }
-    });
-});
+var dbConnection = mongoose.connection;
+dbConnection.on("error", console.error.bind(console, "connection error:"));
+dbConnection.once("open", function(){
+    console.log("db open");
+    request("https://www.reddit.com/r/funhaus", function(error, response, html) {
 
-app.get("/scrape", function(req, res){
+        var $ = cheerio.load(html);
+        $("p.title").each(function(i, element) {
+            var results = {};
+            var title = $(element).text();
+            var link = $(element).children("a").attr("href");
 
+            if (link.includes("/r/")) {
+                link = "https://www.reddit.com" + link;
+            }
 
-request("https://www.reddit.com/r/funhaus", function(error, response, html) {
+            results.title = title;
+            results.link = link;
 
-    var $ = cheerio.load(html);
-    //var results = [];
-    $("p.title").each(function(i, element) {
-        var title = $(element).text();
-        //var summary = $(element).children("p");
-        var link = $(element).children("a").attr("href");
-
-        if (link.includes("/r/")) {
-            link = "https://www.reddit.com" + link;
-        }
-
-        if (title && link) {
-            db.scrapedData.insert({
-                title: title,
-                //summary: summary,
-                link: link
-        },
-            function(err, inserted){
-                if (err) {
-                    console.log(err);
-                } else {
-                    console.log(inserted);
-                }
+                db.create(results)
+                .then(function(dbArticle) {
+                  console.log(dbArticle);
+                })
+                .catch(function(err) {
+                console.log(err);
+                  return res.json(err);
+                });
             });
-        }
-        });
-    });
-res.send("Completed Scrape");
-});
+        app.get("/articles/:id", function (req, res){
+            db.findOne({ _id: req.params.id })
+                .populate("note")
+                .then(function(dbArticle){
+                    res.json(dbArticle);
+                });
+            });
+        app.post("/articles/:id", function(req, res){
+            db.Note.create(req.body)
+              .then(function(dbNote){
+                  return db.findOneAndUpdate({ _id: req.params.id}, { note: dbNote._id}, { new: true});
+              })
+              .then(function(dbArticle){
+                  res.json(dbArticle);
+              });
+        })
+       });
+      });
+
+    app.listen(PORT, function() {
+        console.log("App running on port " + PORT + "!");
+      });
