@@ -12,7 +12,9 @@ var app = express();
 var databaseURL = "funhausdb";
 var collections = ["scrapedData"];
 
-app.use(bodyParser.urlencoded({extended: true }));
+app.use(bodyParser.urlencoded({
+    extended: true
+}));
 app.use(express.static("public"));
 
 var MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost/funhausdb";
@@ -21,7 +23,7 @@ mongoose.connect(MONGODB_URI);
 
 var dbConnection = mongoose.connection;
 dbConnection.on("error", console.error.bind(console, "connection error:"));
-dbConnection.once("open", function(){
+dbConnection.once("open", function() {
     console.log("db open");
     request("https://www.reddit.com/r/funhaus", function(error, response, html) {
 
@@ -38,34 +40,40 @@ dbConnection.once("open", function(){
             results.title = title;
             results.link = link;
 
-                db.create(results)
+            db.create(results)
                 .then(function(dbArticle) {
-                  console.log(dbArticle);
+                    console.log(dbArticle);
                 })
                 .catch(function(err) {
-                console.log(err);
-                  return res.json(err);
+                    console.log(err);
+                    return res.json(err);
                 });
-            });
-        app.get("/articles/:id", function (req, res){
-            db.findOne({ _id: req.params.id })
-                .populate("note")
-                .then(function(dbArticle){
-                    res.json(dbArticle);
-                });
-            });
-        app.post("/articles/:id", function(req, res){
-            db.Note.create(req.body)
-              .then(function(dbNote){
-                  return db.findOneAndUpdate({ _id: req.params.id}, { note: dbNote._id}, { new: true});
-              })
-              .then(function(dbArticle){
-                  res.json(dbArticle);
-              });
-        })
-       });
-      });
+        });
+    });
+});
 
-    app.listen(PORT, function() {
-        console.log("App running on port " + PORT + "!");
-      });
+app.get("/articles", function(req, res) {
+    db.find({}, function(err, article) {
+        res.json(article);
+    });
+});
+
+app.post("/notes/:id", function(req, res) {
+    db.Note.create(req.body)
+        .then(function(dbNote) {
+            return db.findOneAndUpdate({
+                _id: req.params.id
+            }, {
+                note: dbNote._id
+            }, {
+                new: true
+            });
+        })
+        .then(function(dbArticle) {
+            res.json(dbArticle);
+        });
+});
+
+app.listen(PORT, function() {
+    console.log("App running on port " + PORT + "!");
+});
